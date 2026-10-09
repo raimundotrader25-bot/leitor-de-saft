@@ -1,4 +1,4 @@
-# Leitor de SAF-T
+# Leitor SAF-T · Rael & Va
 
 Abra **https://raimundotrader25-bot.github.io/leitor-de-saft/** e arraste o ficheiro SAF-T (.xml) para a página.
 

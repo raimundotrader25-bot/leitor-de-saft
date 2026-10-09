@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Leitor SAF-T</title>
+<title>Leitor SAF-T · Rael &amp; Va</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -72,9 +72,9 @@ section.block { display: grid; gap: 10px; min-width: 0; }
 .block-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
 .block-head p { margin: 0; color: var(--muted); font-size: 0.88rem; }
 
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-.tile { padding: 12px 14px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 8px 8px 0; display: grid; gap: 6px; }
-.tile .big { font: 500 1.45rem/1.1 var(--f-mono); font-variant-numeric: tabular-nums; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 10px; }
+.tile { min-width: 0; padding: 12px 14px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 8px 8px 0; display: grid; gap: 6px; }
+.tile .big { font: 500 clamp(1rem, 1.55vw, 1.25rem)/1.15 var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile .sub { color: var(--muted); font-size: 0.82rem; }
 
 .table-box { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
@@ -145,13 +145,19 @@ h3 { font: 600 0.98rem var(--f-display); margin: 0; }
 .msg.a ul { margin: 0 0 8px; padding-left: 18px; }
 .msg .meta { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
 .btn:disabled { opacity: .5; cursor: default; }
+.brand { font: 600 0.78rem/1 var(--f-display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+.watermark { position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); z-index: 0; pointer-events: none; user-select: none;
+  text-align: center; white-space: nowrap; overflow: hidden; font: 600 clamp(3.5rem, 15vw, 12rem)/1 var(--f-display); letter-spacing: 0.04em; color: var(--ink); opacity: 0.045; }
+.wrap { position: relative; z-index: 1; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
+<div class="watermark" aria-hidden="true">RAEL &amp; VA</div>
 <div class="wrap">
   <header class="top">
     <div>
+      <div class="brand">Rael &amp; Va · Ferramentas</div>
       <h1>Leitor SAF-T</h1>
       <p>Abra um ficheiro SAF-T de Angola (ou de Portugal) e veja todos os documentos que ele contém: faturas, notas de crédito, guias, orçamentos, recibos e lançamentos contabilísticos. O ficheiro é lido só no seu navegador e não é enviado para lado nenhum.</p>
     </div>
@@ -268,7 +274,7 @@ h3 { font: 600 0.98rem var(--f-display); margin: 0; }
     </div>
   </div>
 
-  <footer>Suporta SAF-T de Angola (AO 1.01, valores em kwanzas) e de Portugal (PT 1.03 e 1.04, valores em euros): faturação, contabilidade e integrado. O país é detetado pelo ficheiro. Codificações UTF-8 e Windows-1252.</footer>
+  <footer>Leitor SAF-T é uma ferramenta <strong>Rael &amp; Va</strong>. Suporta SAF-T de Angola (AO 1.01, valores em kwanzas) e de Portugal (PT 1.03 e 1.04, valores em euros): faturação, contabilidade e integrado. O país é detetado pelo ficheiro. Codificações UTF-8 e Windows-1252.</footer>
 </div>
 
 <script>
