@@ -1,0 +1,1143 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Leitor SAF-T</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: barra de ficheiro, ficha da empresa, navegação fixa por secções; resumo e alertas primeiro, detalhe depois; uma coluna larga com tabelas roláveis */
+:root {
+  --bg: #f5f6f4;
+  --surface: #ffffff;
+  --ink: #1d2a26;
+  --muted: #5d6b66;
+  --line: #d9dfdc;
+  --accent: #0f6b55;
+  --accent-soft: #e2f0eb;
+  --warn: #9a5b00;
+  --warn-soft: #fbefd9;
+  --bad: #a3302a;
+  --bad-soft: #f8e1df;
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121816; --surface: #1a2220; --ink: #e3ebe7; --muted: #94a39d; --line: #2e3a36;
+    --accent: #4cc3a0; --accent-soft: #173229; --warn: #e3a54a; --warn-soft: #3a2c14;
+    --bad: #ef7d74; --bad-soft: #3b1d1b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121816; --surface: #1a2220; --ink: #e3ebe7; --muted: #94a39d; --line: #2e3a36;
+  --accent: #4cc3a0; --accent-soft: #173229; --warn: #e3a54a; --warn-soft: #3a2c14;
+  --bad: #ef7d74; --bad-soft: #3b1d1b; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 48px; display: grid; gap: 20px; }
+h1, h2 { font-family: var(--f-display); font-weight: 600; text-wrap: balance; margin: 0; }
+h1 { font-size: 1.6rem; letter-spacing: -0.01em; }
+h2 { font-size: 1.15rem; }
+.eyebrow { font: 500 0.72rem/1 var(--f-body); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.num, td.n, th.n { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+td.n, th.n { text-align: right; white-space: nowrap; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+header.top p { margin: 4px 0 0; color: var(--muted); max-width: 62ch; }
+
+.drop { border: 1.5px dashed var(--line); border-radius: 10px; background: var(--surface); padding: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 14px; justify-content: space-between; transition: border-color .15s, background .15s; }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop .info { min-width: 0; }
+.drop .file { font-family: var(--f-mono); font-size: 0.9rem; word-break: break-all; }
+.drop .hint { color: var(--muted); font-size: 0.88rem; }
+.btn { font: 500 0.9rem var(--f-body); border: 1px solid var(--accent); background: var(--accent); color: var(--surface); padding: 8px 14px; border-radius: 6px; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--accent); }
+.btn:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sample { display: inline-block; margin-left: 8px; font: 500 0.7rem/1 var(--f-body); text-transform: uppercase; letter-spacing: .06em; padding: 4px 6px; border-radius: 4px; background: var(--warn-soft); color: var(--warn); vertical-align: middle; }
+.error { background: var(--bad-soft); color: var(--bad); padding: 12px 14px; border-radius: 8px; }
+
+.company { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px 24px; align-items: start; padding: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.company .name { grid-column: 1 / -1; }
+.company .name strong { font-family: var(--f-display); font-size: 1.3rem; font-weight: 600; }
+.kv { display: grid; gap: 4px; min-width: 0; }
+.kv span:last-child { overflow-wrap: anywhere; }
+
+section.block { display: grid; gap: 10px; min-width: 0; }
+.block-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.block-head p { margin: 0; color: var(--muted); font-size: 0.88rem; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.tile { padding: 12px 14px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 8px 8px 0; display: grid; gap: 6px; }
+.tile .big { font: 500 1.45rem/1.1 var(--f-mono); font-variant-numeric: tabular-nums; }
+.tile .sub { color: var(--muted); font-size: 0.82rem; }
+
+.table-box { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th { text-align: left; font: 500 0.72rem var(--f-body); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; position: sticky; top: 0; background: var(--surface); }
+td { padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+tfoot td { font-weight: 600; border-top: 1px solid var(--line); }
+.code { font: 600 0.82rem var(--f-mono); background: var(--accent-soft); color: var(--accent); padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+.pill { font: 500 0.75rem var(--f-body); padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.ok { background: var(--accent-soft); color: var(--accent); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+.muted { color: var(--muted); }
+.small { font-size: 0.8rem; }
+.pill.neutral { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+tr.group td { background: var(--bg); padding-block: 6px; }
+tr.subtotal td { font-weight: 600; }
+.nc + .nc { margin-top: 6px; }
+tr.void td { color: var(--muted); }
+tr.void td .docno { text-decoration: line-through; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.filters input, .filters select { font: 0.9rem var(--f-body); padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.filters input { flex: 1 1 220px; min-width: 0; }
+.more { justify-self: center; }
+.toast { color: var(--accent); font-size: 0.85rem; }
+footer { color: var(--muted); font-size: 0.82rem; }
+
+nav.jump { display: flex; flex-wrap: wrap; gap: 6px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2; background: var(--bg); padding-block: 8px; border-bottom: 1px solid var(--line); }
+nav.jump a { font-size: 0.82rem; color: var(--ink); text-decoration: none; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); white-space: nowrap; }
+nav.jump a:hover, nav.jump a:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+nav.jump a .count { font-family: var(--f-mono); margin-left: 4px; color: var(--bad); }
+section.block { scroll-margin-top: 64px; }
+
+.checks { display: grid; gap: 8px; }
+.check { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: start; padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-left-width: 4px; border-radius: 0 8px 8px 0; min-width: 0; }
+.check.ok { border-left-color: var(--accent); }
+.check.warn { border-left-color: var(--warn); }
+.check.bad { border-left-color: var(--bad); }
+.check .what { font-weight: 600; }
+.check .why { grid-column: 2; color: var(--muted); font-size: 0.86rem; }
+.check details { grid-column: 2; font-size: 0.86rem; min-width: 0; }
+.check summary { cursor: pointer; color: var(--accent); }
+.check ul { margin: 6px 0 0; padding-left: 18px; }
+.check li { overflow-wrap: anywhere; }
+
+.bar { height: 10px; border-radius: 2px; background: var(--accent); min-width: 1px; }
+.bar.neg { background: var(--bad); }
+td.barcell { width: 32%; min-width: 120px; vertical-align: middle; }
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr)); gap: 20px; }
+.split > * { min-width: 0; display: grid; gap: 10px; align-content: start; }
+h3 { font: 600 0.98rem var(--f-display); margin: 0; }
+.notice { background: var(--warn-soft); color: var(--warn); padding: 10px 14px; border-radius: 8px; font-size: 0.9rem; }
+
+.ask { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; }
+.ask form { display: flex; flex-wrap: wrap; gap: 8px; }
+.ask textarea { flex: 1 1 320px; min-width: 0; font: 0.95rem/1.4 var(--f-body); padding: 9px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); resize: vertical; min-height: 44px; }
+.ask textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 0.82rem var(--f-body); padding: 4px 10px; border-radius: 999px; border: 1px dashed var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
+.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.convo { display: grid; gap: 10px; }
+.msg { padding: 10px 14px; border-radius: 8px; max-width: 80ch; overflow-wrap: anywhere; }
+.msg.q { background: var(--accent-soft); justify-self: end; }
+.msg.a { background: var(--bg); border: 1px solid var(--line); }
+.msg.a p { margin: 0 0 8px; } .msg.a p:last-child { margin: 0; }
+.msg.a ul { margin: 0 0 8px; padding-left: 18px; }
+.msg .meta { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
+.btn:disabled { opacity: .5; cursor: default; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Leitor SAF-T</h1>
+      <p>Abra um ficheiro SAF-T de Angola (ou de Portugal) e veja todos os documentos que ele contém: faturas, notas de crédito, guias, orçamentos, recibos e lançamentos contabilísticos. O ficheiro é lido só no seu navegador e não é enviado para lado nenhum.</p>
+    </div>
+  </header>
+
+  <label class="drop" id="drop" for="file">
+    <div class="info">
+      <div class="file" id="fileName">—</div>
+      <div class="hint">Arraste o ficheiro .xml para aqui ou escolha-o no computador.</div>
+    </div>
+    <span class="btn">Escolher ficheiro SAF-T</span>
+    <input type="file" id="file" accept=".xml,text/xml,application/xml" hidden>
+  </label>
+
+  <div id="error" class="error" hidden></div>
+
+  <div id="out" hidden>
+    <div style="display:grid;gap:20px">
+      <div class="company" id="company"></div>
+
+      <nav class="jump" aria-label="Secções">
+        <a href="#resumo">Resumo</a><a href="#alertas">Alertas<span class="count" id="alertCount"></span></a><a href="#perguntar" hidden>Perguntar ao Claude</a>
+        <a href="#iva">IVA</a><a href="#notas">Notas de crédito</a><a href="#receber">Por receber</a><a href="#analise">Clientes e meses</a>
+        <a href="#tipos">Tipos e séries</a><a href="#lista">Lista de documentos</a>
+      </nav>
+
+      <section class="block" id="resumo">
+        <div class="block-head"><h2>Resumo</h2><p id="periodNote"></p></div>
+        <div class="tiles" id="tiles"></div>
+      </section>
+
+      <section class="block" id="alertas">
+        <div class="block-head"><h2>Alertas</h2><p>Verificações automáticas ao ficheiro: NIF, contas de IVA, isenções, datas, totais de controlo e numeração.</p></div>
+        <div class="checks" id="checks"></div>
+      </section>
+
+      <section class="block" id="perguntar" hidden>
+        <div class="block-head"><h2>Perguntar ao Claude</h2><p>Faça perguntas sobre este ficheiro em linguagem normal.</p></div>
+        <div class="ask">
+          <div id="askOff" class="muted">A ligar ao Claude…</div>
+          <div id="askOn" hidden>
+            <div style="display:grid;gap:12px">
+              <div class="chips" id="chips"></div>
+              <form id="askForm">
+                <textarea id="askInput" rows="2" placeholder="Ex.: Quanto faturei ao cliente Café Ribeira em agosto?"></textarea>
+                <button class="btn" id="askBtn" type="submit">Perguntar</button>
+                <button class="btn ghost" id="stopBtn" type="button" hidden>Parar</button>
+              </form>
+              <div class="convo" id="convo"></div>
+              <p class="muted small" style="margin:0">Ao perguntar, o Claude recebe um resumo deste ficheiro (totais, meses, clientes, alertas) e pode consultar documentos específicos. Usa a sua conta Claude.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="block" id="iva">
+        <div class="block-head"><h2>Vendas com IVA e sem IVA</h2><p>Bases por linha de documento (FT, FS, FR, ND…). As notas de crédito são abatidas. Anulados ficam de fora.</p></div>
+        <div class="table-box"><table id="byVat"></table></div>
+      </section>
+
+      <section class="block" id="notas">
+        <div class="block-head"><h2>Notas de crédito, fatura a fatura</h2><p>Cada nota de crédito é ligada à fatura que indica nas suas linhas (References).</p></div>
+        <div class="table-box"><table id="ncByInvoice"></table></div>
+      </section>
+
+      <section class="block" id="receber">
+        <div class="block-head"><h2>Faturas por receber</h2><p id="arNote"></p></div>
+        <div class="notice" id="arWarn" hidden></div>
+        <div class="tiles" id="arTiles"></div>
+        <div class="split">
+          <div><h3>Por cliente</h3><div class="table-box"><table id="arClients"></table></div></div>
+          <div><h3>Faturas em aberto, das mais antigas para as mais recentes</h3><div class="table-box"><table id="arOpen"></table></div></div>
+        </div>
+      </section>
+
+      <section class="block" id="analise">
+        <div class="block-head"><h2>Clientes, meses e produtos</h2><p>Base líquida de vendas (sem IVA), já com notas de crédito abatidas.</p></div>
+        <div style="display:grid;gap:20px">
+          <div style="display:grid;gap:10px"><h3>Mês a mês</h3><div class="table-box"><table id="byMonth"></table></div></div>
+          <div class="split">
+            <div><h3 id="topClientsTitle">Maiores clientes</h3><div class="table-box"><table id="topClients"></table></div></div>
+            <div><h3>Produtos e serviços mais vendidos</h3><div class="table-box"><table id="topProducts"></table></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="block" id="tipos">
+        <div class="block-head"><h2>Documentos por tipo</h2><p>Valores com imposto (GrossTotal). Anulados ficam de fora do total.</p></div>
+        <div class="table-box"><table id="byType"></table></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><h2>Séries e numeração</h2><p>Falhas = números em falta entre o primeiro e o último documento da série neste ficheiro.</p></div>
+        <div class="table-box"><table id="bySeries"></table></div>
+      </section>
+
+      <section class="block" id="glBlock" hidden>
+        <div class="block-head"><h2>Contabilidade: diários</h2><p>Lançamentos em GeneralLedgerEntries.</p></div>
+        <div class="table-box"><table id="journals"></table></div>
+      </section>
+
+      <section class="block" id="lista">
+        <div class="block-head"><h2>Lista de documentos</h2><span class="toast" id="toast"></span></div>
+        <div class="filters">
+          <input id="q" type="search" placeholder="Procurar nº, cliente ou NIF">
+          <select id="fType"><option value="">Todos os tipos</option></select>
+          <select id="fVat"><option value="">Com e sem IVA</option><option value="com">Só com IVA</option><option value="sem">Só sem IVA</option><option value="misto">Com e sem IVA no mesmo documento</option></select>
+          <select id="fStatus"><option value="">Todos os estados</option><option value="N">Normais</option><option value="A">Anulados</option></select>
+          <button class="btn ghost" id="copy" type="button">Copiar para Excel</button>
+        </div>
+        <div class="table-box"><table id="docs"></table></div>
+        <button class="btn ghost more" id="more" type="button" hidden>Mostrar mais</button>
+      </section>
+    </div>
+  </div>
+
+  <footer>Suporta SAF-T de Angola (AO 1.01, valores em kwanzas) e de Portugal (PT 1.03 e 1.04, valores em euros): faturação, contabilidade e integrado. O país é detetado pelo ficheiro. Codificações UTF-8 e Windows-1252.</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const TYPE_NAMES = {
+    FT: "Fatura", FS: "Fatura simplificada", FR: "Fatura-recibo", ND: "Nota de débito", NC: "Nota de crédito",
+    VD: "Venda a dinheiro", TV: "Talão de venda", TD: "Talão de devolução", AA: "Alienação de ativos", DA: "Devolução de ativos",
+    GR: "Guia de remessa", GT: "Guia de transporte", GA: "Guia de movimentação de ativos", GC: "Guia de consignação", GD: "Guia ou nota de devolução",
+    CM: "Consulta de mesa", CC: "Crédito de consignação", FC: "Fatura de consignação", FO: "Folha de obra", NE: "Nota de encomenda",
+    OU: "Outros", OR: "Orçamento", PF: "Fatura pró-forma", DC: "Documento de conferência", RP: "Prémio ou recibo de prémio",
+    RE: "Estorno ou recibo de estorno", CS: "Imputação a cosseguradoras", LD: "Imputação a cosseguradora líder", RA: "Resseguro aceite",
+    RC: "Recibo (IVA de caixa)", RG: "Recibo", PP: "Fatura pró-forma", AR: "Aviso de cobrança/recibo", FG: "Fatura genérica", AC: "Aviso de cobrança"
+  };
+  const ORIGINS = { sales: "Faturação", moves: "Guias", work: "Conferência", pay: "Recibos" };
+  const STATUS = {
+    N: ["Normal", "ok"], A: ["Anulado", "bad"], F: ["Faturado", "ok"], S: ["Autofaturação", "warn"],
+    R: ["Resumo", "warn"], T: ["Por conta de terceiros", "warn"]
+  };
+  const BASIS = {
+    C: "Contabilidade", E: "Faturação emitida por terceiros", F: "Faturação", I: "Integrado (contabilidade + faturação)",
+    P: "Faturação parcial", R: "Recibos", S: "Autofaturação", T: "Documentos de transporte"
+  };
+
+  const VAT_LABEL = { com: "Com IVA", sem: "Sem IVA", misto: "Com e sem IVA" };
+  const VAT_PILL = { com: '<span class="pill ok">Com IVA</span>', sem: '<span class="pill warn">Sem IVA</span>', misto: '<span class="pill neutral">Com e sem IVA</span>' };
+
+  // ---------- helpers ----------
+  const $ = (id) => document.getElementById(id);
+  const kids = (el, name) => el ? Array.from(el.children).filter(c => c.localName === name) : [];
+  const child = (el, name) => kids(el, name)[0] || null;
+  const txt = (el, path) => {
+    let cur = el;
+    for (const p of path.split("/")) { cur = child(cur, p); if (!cur) return ""; }
+    return cur.textContent.trim();
+  };
+  const all = (root, name) => Array.from(root.getElementsByTagNameNS("*", name));
+  const num = (s) => { const v = parseFloat(s); return isFinite(v) ? v : 0; };
+  // moeda conforme o país do SAF-T (Angola por omissão)
+  const COUNTRIES = {
+    AO: { code: "AOA", locale: "pt-AO", name: "kwanza (Kz)", tax: "AGT" },
+    PT: { code: "EUR", locale: "pt-PT", name: "euro (€)", tax: "AT" }
+  };
+  let COUNTRY = "AO", CUR = COUNTRIES.AO;
+  let money = new Intl.NumberFormat(CUR.locale, { style: "currency", currency: CUR.code });
+  function setCountry(c) {
+    COUNTRY = COUNTRIES[c] ? c : "AO"; CUR = COUNTRIES[COUNTRY];
+    money = new Intl.NumberFormat(CUR.locale, { style: "currency", currency: CUR.code });
+  }
+  const int = new Intl.NumberFormat("pt-PT");
+  const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const fmtDate = (d) => d ? d.split("-").reverse().join("/") : "";
+
+  function decode(buf) {
+    const head = new TextDecoder("latin1").decode(new Uint8Array(buf, 0, Math.min(300, buf.byteLength)));
+    const m = head.match(/encoding\s*=\s*["']([^"']+)["']/i);
+    let enc = m ? m[1].toLowerCase() : "utf-8";
+    if (enc === "iso-8859-1" || enc === "latin1") enc = "windows-1252";
+    try { return new TextDecoder(enc).decode(buf); } catch (e) { return new TextDecoder("utf-8").decode(buf); }
+  }
+
+  // "FT A/123" -> { series: "FT A", seq: 123 }
+  function splitNo(no) {
+    const i = no.lastIndexOf("/");
+    if (i < 0) return { series: no, seq: NaN };
+    return { series: no.slice(0, i).trim(), seq: parseInt(no.slice(i + 1), 10) };
+  }
+
+  // ---------- parsing ----------
+  function parse(xmlText) {
+    const doc = new DOMParser().parseFromString(xmlText, "application/xml");
+    if (doc.getElementsByTagName("parsererror").length) throw new Error("O ficheiro não é um XML válido. Confirme que escolheu o SAF-T (.xml) e não um ficheiro comprimido.");
+    const root = doc.documentElement;
+    if (root.localName !== "AuditFile") throw new Error("Este XML não é um SAF-T: falta o elemento AuditFile na raiz.");
+
+    const h = child(root, "Header");
+    const header = {
+      version: txt(h, "AuditFileVersion"),
+      country: /PT_\d/.test(root.namespaceURI || "") || /^PT/.test(txt(h, "AuditFileVersion")) ? "PT" : "AO",
+      company: txt(h, "CompanyName"),
+      nif: txt(h, "TaxRegistrationNumber"),
+      basis: txt(h, "TaxAccountingBasis"),
+      year: txt(h, "FiscalYear"),
+      start: txt(h, "StartDate"),
+      end: txt(h, "EndDate"),
+      created: txt(h, "DateCreated"),
+      software: txt(h, "ProductID"),
+      cert: txt(h, "SoftwareCertificateNumber"),
+      city: txt(h, "CompanyAddress/City")
+    };
+
+    const customers = {};
+    for (const c of all(root, "Customer")) {
+      customers[txt(c, "CustomerID")] = { name: txt(c, "CompanyName"), nif: txt(c, "CustomerTaxID") };
+    }
+    const suppliers = {};
+    for (const s of all(root, "Supplier")) {
+      suppliers[txt(s, "SupplierID")] = { name: txt(s, "CompanyName"), nif: txt(s, "SupplierTaxID") };
+    }
+
+    setCountry(header.country);
+    const products = {};
+    for (const pr of all(root, "Product")) products[txt(pr, "ProductCode")] = txt(pr, "ProductDescription");
+
+    const docs = [];
+    const add = (origin, el, noTag, typeTag, dateTag, statusPath) => {
+      const no = txt(el, noTag);
+      const { series, seq } = splitNo(no);
+      const cid = txt(el, "CustomerID");
+      const sid = txt(el, "SupplierID");
+      const party = customers[cid] || suppliers[sid] || { name: cid || sid, nif: "" };
+      const d = {
+        origin, no, series, seq,
+        type: txt(el, typeTag) || series.split(" ")[0],
+        date: txt(el, dateTag),
+        status: txt(el, statusPath) || "N",
+        party: party.name, nif: party.nif, partyId: cid || sid,
+        net: num(txt(el, "DocumentTotals/NetTotal")),
+        tax: num(txt(el, "DocumentTotals/TaxPayable")),
+        gross: num(txt(el, "DocumentTotals/GrossTotal")),
+        lines: [], refs: [], vatClass: "", debit: 0, credit: 0, settles: []
+      };
+      if (origin === "sales") {
+        for (const l of kids(el, "Line")) {
+          const cr = num(txt(l, "CreditAmount")), db = num(txt(l, "DebitAmount")), amt = cr + db;
+          d.credit += cr; d.debit += db;
+          const code = txt(l, "ProductCode");
+          const pct = num(txt(l, "Tax/TaxPercentage"));
+          const taxAmt = num(txt(l, "Tax/TaxAmount"));
+          const refs = kids(l, "References").map(r => txt(r, "Reference").replace(/\s+/g, " ")).filter(Boolean);
+          const reason = kids(l, "References").map(r => txt(r, "Reason")).filter(Boolean)[0] || "";
+          d.lines.push({
+            amt, pct, vat: taxAmt || amt * pct / 100, withVat: pct > 0 || taxAmt > 0,
+            region: txt(l, "Tax/TaxCountryRegion") || COUNTRY,
+            exCode: txt(l, "TaxExemptionCode"), exReason: txt(l, "TaxExemptionReason"),
+            ref: refs[0] || "", reason,
+            code, desc: txt(l, "ProductDescription") || products[code] || code, qty: num(txt(l, "Quantity")), unit: txt(l, "UnitOfMeasure")
+          });
+          for (const r of refs) if (!d.refs.includes(r)) d.refs.push(r);
+        }
+        const hasCom = d.lines.length ? d.lines.some(l => l.withVat) : d.tax > 0;
+        const hasSem = d.lines.length ? d.lines.some(l => !l.withVat) : d.tax <= 0;
+        d.vatClass = hasCom && hasSem ? "misto" : hasCom ? "com" : "sem";
+      } else if (origin === "pay") {
+        // recibo: que faturas liquida (o total do recibo é repartido pelas linhas)
+        const ls = kids(el, "Line").map(l => ({
+          amt: num(txt(l, "CreditAmount")) + num(txt(l, "DebitAmount")),
+          refs: kids(l, "SourceDocumentID").map(s => txt(s, "OriginatingON").replace(/\s+/g, " ")).filter(Boolean)
+        }));
+        const base = ls.reduce((s, l) => s + l.amt, 0);
+        for (const l of ls) for (const r of l.refs) d.settles.push({ ref: r, gross: base ? d.gross * l.amt / base / l.refs.length : 0 });
+        d.refs = [...new Set(d.settles.map(x => x.ref))];
+      }
+      if (origin === "work" || origin === "pay") {
+        for (const l of kids(el, "Line")) { d.credit += num(txt(l, "CreditAmount")); d.debit += num(txt(l, "DebitAmount")); }
+      }
+      docs.push(d);
+    };
+    for (const el of all(root, "Invoice")) add("sales", el, "InvoiceNo", "InvoiceType", "InvoiceDate", "DocumentStatus/InvoiceStatus");
+    for (const el of all(root, "StockMovement")) add("moves", el, "DocumentNumber", "MovementType", "MovementDate", "DocumentStatus/MovementStatus");
+    for (const el of all(root, "WorkDocument")) add("work", el, "DocumentNumber", "WorkType", "WorkDate", "DocumentStatus/WorkStatus");
+    for (const el of all(root, "Payment")) add("pay", el, "PaymentRefNo", "PaymentType", "TransactionDate", "DocumentStatus/PaymentStatus");
+
+    const journals = [];
+    for (const j of all(root, "Journal")) {
+      const tx = kids(j, "Transaction");
+      let debit = 0, credit = 0, lines = 0;
+      for (const t of tx) {
+        for (const l of all(t, "DebitLine")) { debit += num(txt(l, "DebitAmount")); lines++; }
+        for (const l of all(t, "CreditLine")) { credit += num(txt(l, "CreditAmount")); lines++; }
+      }
+      journals.push({ id: txt(j, "JournalID"), desc: txt(j, "Description"), tx: tx.length, lines, debit, credit });
+    }
+
+    // totais de controlo declarados no ficheiro
+    const control = [];
+    const ctl = (tag, label) => {
+      const el = all(root, tag)[0];
+      if (el) control.push({ tag, label, entries: txt(el, "NumberOfEntries"), debit: txt(el, "TotalDebit"), credit: txt(el, "TotalCredit") });
+    };
+    ctl("SalesInvoices", "Faturação"); ctl("WorkingDocuments", "Documentos de conferência"); ctl("Payments", "Recibos");
+
+    return {
+      header, docs, journals, control, customerList: customers,
+      customers: Object.keys(customers).length,
+      hasPayments: all(root, "Payments").length > 0
+    };
+  }
+
+  // ---------- aggregation ----------
+  function summarize(docs) {
+    const types = new Map(), series = new Map();
+    for (const d of docs) {
+      const k = d.origin + "|" + d.type;
+      if (!types.has(k)) types.set(k, { origin: d.origin, type: d.type, count: 0, void: 0, net: 0, tax: 0, gross: 0, first: d.date, last: d.date });
+      const t = types.get(k);
+      t.count++;
+      if (d.date && d.date < t.first) t.first = d.date;
+      if (d.date && d.date > t.last) t.last = d.date;
+      if (d.status === "A") t.void++; else { t.net += d.net; t.tax += d.tax; t.gross += d.gross; }
+
+      if (!series.has(d.series)) series.set(d.series, { series: d.series, type: d.type, seqs: [] });
+      if (!isNaN(d.seq)) series.get(d.series).seqs.push(d.seq);
+    }
+    const order = Object.keys(ORIGINS);
+    const typeRows = [...types.values()].sort((a, b) => order.indexOf(a.origin) - order.indexOf(b.origin) || a.type.localeCompare(b.type));
+    const seriesRows = [...series.values()].map(s => {
+      const seqs = [...new Set(s.seqs)].sort((a, b) => a - b);
+      const missing = [];
+      for (let i = 1; i < seqs.length; i++) for (let n = seqs[i - 1] + 1; n < seqs[i]; n++) missing.push(n);
+      return { series: s.series, type: s.type, count: s.seqs.length, min: seqs[0], max: seqs[seqs.length - 1], missing, dupes: s.seqs.length - seqs.length };
+    }).sort((a, b) => a.series.localeCompare(b.series));
+    return { typeRows, seriesRows };
+  }
+
+  const RATE_NAMES = {
+    "AO|14": "taxa geral", "AO|7": "taxa reduzida", "AO|5": "taxa reduzida",
+    "PT|23": "taxa normal", "PT|13": "taxa intermédia", "PT|6": "taxa reduzida",
+    "PT-AC|16": "taxa normal Açores", "PT-AC|9": "taxa intermédia Açores", "PT-AC|4": "taxa reduzida Açores",
+    "PT-MA|22": "taxa normal Madeira", "PT-MA|12": "taxa intermédia Madeira", "PT-MA|5": "taxa reduzida Madeira"
+  };
+
+  // Bases com IVA (por taxa) e sem IVA (por código de isenção), linha a linha
+  function vatSummary(docs) {
+    const rows = new Map();
+    const bump = (key, init, d, amt, vat) => {
+      if (!rows.has(key)) rows.set(key, Object.assign({ docs: new Set(), billed: 0, credited: 0, vat: 0 }, init));
+      const r = rows.get(key);
+      r.docs.add(d.no);
+      if (d.type === "NC") { r.credited += amt; r.vat -= vat; } else { r.billed += amt; r.vat += vat; }
+    };
+    for (const d of docs) {
+      if (d.origin !== "sales" || d.status === "A") continue;
+      if (!d.lines.length) {
+        if (d.tax > 0) bump("com|?|?", { kind: "com", label: "IVA (taxa não indicada)", sub: "documento sem linhas", order: -1 }, d, d.net, d.tax);
+        else bump("sem|?", { kind: "sem", label: "Sem IVA", sub: "documento sem linhas", order: "~" }, d, d.net, 0);
+        continue;
+      }
+      for (const l of d.lines) {
+        if (l.withVat) {
+          const rk = l.region + "|" + l.pct;
+          bump("com|" + rk, { kind: "com", label: `IVA ${String(l.pct).replace(".", ",")}%${l.region !== COUNTRY ? " (" + l.region + ")" : ""}`, sub: RATE_NAMES[rk] || "", order: l.pct }, d, l.amt, l.vat);
+        } else {
+          bump("sem|" + (l.exCode || "-"), { kind: "sem", label: l.exCode || "Sem código de isenção", sub: l.exReason, order: l.exCode || "~" }, d, l.amt, 0);
+        }
+      }
+    }
+    const list = [...rows.values()];
+    const com = list.filter(r => r.kind === "com").sort((a, b) => b.order - a.order);
+    const sem = list.filter(r => r.kind === "sem").sort((a, b) => String(a.order).localeCompare(String(b.order)));
+    return { com, sem };
+  }
+
+  // Notas de crédito agrupadas pela fatura de origem indicada nas linhas
+  function creditNotes(docs) {
+    const invoices = new Map();
+    for (const d of docs) if (d.origin === "sales" && d.type !== "NC") invoices.set(d.no, d);
+    const groups = new Map();
+    const push = (ref, nc, gross, reason) => {
+      if (!groups.has(ref)) groups.set(ref, { ref, inv: invoices.get(ref) || null, ncs: [], credited: 0 });
+      const g = groups.get(ref);
+      const prev = g.ncs.find(x => x.no === nc.no);
+      if (prev) { prev.gross += gross; prev.reason = prev.reason || reason; }
+      else g.ncs.push({ no: nc.no, date: nc.date, party: nc.party, gross, reason });
+      g.credited += gross;
+    };
+    for (const d of docs) {
+      if (d.type !== "NC" || d.status === "A") continue;
+      if (!d.lines.length) { push(d.refs[0] || "", d, d.gross, ""); continue; }
+      for (const l of d.lines) push(l.ref, d, l.amt + l.vat, l.reason);
+    }
+    const rank = (g) => !g.ref ? 2 : g.inv ? 0 : 1;
+    return [...groups.values()].sort((a, b) => rank(a) - rank(b) || a.ref.localeCompare(b.ref, "pt", { numeric: true }));
+  }
+
+  // ---------- análise ----------
+  const sign = (d) => d.type === "NC" ? -1 : 1;
+  const isSale = (d) => d.origin === "sales" && d.status !== "A";
+  const cents = (a, b) => Math.abs(a - b) > 0.015;
+  const docLine = (d) => `${d.no} · ${fmtDate(d.date)} · ${d.party || "sem cliente"}`;
+
+  // NIF português: 9 dígitos, dígito de controlo módulo 11
+  function nifState(raw) {
+    const n = String(raw || "").replace(/^PT/i, "").replace(/\s/g, "");
+    if (!/^\d{9}$/.test(n)) return "foreign";
+    if (!/^[1235689]|^4[5]|^7[0-9]/.test(n)) return "bad";
+    let sum = 0;
+    for (let i = 0; i < 8; i++) sum += +n[i] * (9 - i);
+    const r = sum % 11, check = r < 2 ? 0 : 11 - r;
+    return check === +n[8] ? "ok" : "bad";
+  }
+
+  function buildChecks(data, ctx) {
+    const { header: h, docs, control, customerList } = data;
+    const out = [];
+    const add = (level, what, why, items = []) => out.push({ level, what, why, items });
+
+    // 1. NIF da empresa
+    if (COUNTRY === "AO") {
+      if (!h.nif) add("bad", "O ficheiro não tem o NIF da empresa", "");
+      else add("ok", "NIF da empresa indicado", h.nif);
+    } else if (h.nif) {
+      if (nifState(h.nif) === "bad") add("bad", "O NIF da empresa não é válido", `${h.nif} falha o dígito de controlo.`);
+      else add("ok", "NIF da empresa válido", h.nif);
+    }
+
+    // 2. NIF dos clientes
+    const custs = Object.values(customerList);
+    if (COUNTRY === "AO") {
+      const missing = custs.filter(c => !String(c.nif || "").trim());
+      const odd = custs.filter(c => c.nif && !/^[0-9A-Z]{8,15}$/i.test(String(c.nif).replace(/\s/g, "")));
+      if (missing.length) add("warn", `${missing.length} cliente(s) sem NIF`, "Clientes sem número de contribuinte. Para consumidor final use o NIF genérico 999999999.", missing.map(c => c.name || "(sem nome)"));
+      if (odd.length) add("warn", `${odd.length} NIF com formato estranho`, "Contém espaços, traços ou caracteres fora do normal.", odd.map(c => `${c.name} · ${c.nif}`));
+      if (!missing.length && !odd.length && custs.length) add("ok", "Todos os clientes têm NIF", `${custs.length} clientes verificados.`);
+    }
+    const ptNifs = COUNTRY === "PT" ? custs.filter(c => nifState(c.nif) !== "foreign") : [];
+    const badNifs = ptNifs.filter(c => nifState(c.nif) === "bad");
+    if (badNifs.length) add("bad", `${badNifs.length} cliente(s) com NIF inválido`, "O dígito de controlo não bate certo. A AT pode rejeitar estas faturas.", badNifs.map(c => `${c.name} · ${c.nif}`));
+    else if (ptNifs.length) add("ok", "NIF dos clientes válidos", `${ptNifs.length} NIF portugueses verificados.`);
+
+    // 3. Contas de IVA de cada documento
+    const mathErr = [];
+    for (const d of docs) {
+      if (!isSale(d) || !d.lines.length) continue;
+      const ln = d.lines.reduce((a, l) => a + l.amt, 0), lv = d.lines.reduce((a, l) => a + l.vat, 0);
+      if (cents(ln, d.net)) mathErr.push(`${d.no}: soma das linhas ${money.format(ln)} ≠ base do documento ${money.format(d.net)}`);
+      else if (Math.abs(lv - d.tax) > 0.02 + 0.005 * d.lines.length) mathErr.push(`${d.no}: IVA das linhas ${money.format(lv)} ≠ IVA do documento ${money.format(d.tax)}`);
+      else if (cents(d.net + d.tax, d.gross)) mathErr.push(`${d.no}: base + IVA ${money.format(d.net + d.tax)} ≠ total ${money.format(d.gross)}`);
+    }
+    if (mathErr.length) add("bad", `${mathErr.length} documento(s) com contas que não batem`, "A soma das linhas, o IVA ou o total não coincidem com o que o documento declara.", mathErr);
+    else add("ok", "Contas de IVA certas em todos os documentos", "Linhas, IVA e totais coincidem.");
+
+    // 4. Isenções sem código
+    const noCode = [];
+    for (const d of docs) if (isSale(d)) for (const l of d.lines) if (!l.withVat && !l.exCode) { noCode.push(`${docLine(d)} · linha de ${money.format(l.amt)}`); }
+    if (noCode.length) add("bad", `${noCode.length} linha(s) sem IVA e sem motivo de isenção`, "Uma linha a 0 % tem de indicar o código e o motivo de isenção (M00 a M99).", noCode);
+    else if (ctx.vat.sem.length) add("ok", "Todas as vendas sem IVA têm motivo de isenção", "");
+
+    // 5. Datas fora do período
+    if (h.start && h.end) {
+      const out_ = docs.filter(d => d.date && (d.date < h.start || d.date > h.end));
+      if (out_.length) add("warn", `${out_.length} documento(s) com data fora do período`, `O ficheiro diz ser de ${fmtDate(h.start)} a ${fmtDate(h.end)}.`, out_.map(docLine));
+      else add("ok", "Todas as datas dentro do período", `${fmtDate(h.start)} a ${fmtDate(h.end)}`);
+    }
+
+    // 6. Totais de controlo
+    const originOf = { SalesInvoices: "sales", WorkingDocuments: "work", Payments: "pay" };
+    const ctlErr = [];
+    for (const c of control) {
+      const ds = docs.filter(d => d.origin === originOf[c.tag]);
+      const counted = ds.filter(d => d.status !== "A" && d.status !== "F");
+      const deb = counted.reduce((a, d) => a + d.debit, 0), cre = counted.reduce((a, d) => a + d.credit, 0);
+      if (c.entries !== "" && +c.entries !== ds.length) ctlErr.push(`${c.label}: declara ${c.entries} documentos, tem ${ds.length}`);
+      if (c.debit !== "" && cents(num(c.debit), deb)) ctlErr.push(`${c.label}: total a débito declarado ${money.format(num(c.debit))}, calculado ${money.format(deb)}`);
+      if (c.credit !== "" && cents(num(c.credit), cre)) ctlErr.push(`${c.label}: total a crédito declarado ${money.format(num(c.credit))}, calculado ${money.format(cre)}`);
+    }
+    if (ctlErr.length) add("bad", "Totais de controlo não batem", "Os totais no cabeçalho de cada secção não coincidem com os documentos. O ficheiro pode estar incompleto.", ctlErr);
+    else if (control.length) add("ok", "Totais de controlo certos", control.map(c => c.label).join(", "));
+
+    // 7. Faturas simplificadas acima do limite
+    const bigFs = COUNTRY === "PT" ? docs.filter(d => isSale(d) && d.type === "FS" && d.gross > 1000) : [];
+    if (bigFs.length) add("warn", `${bigFs.length} fatura(s) simplificada(s) acima de 1 000 €`, "A fatura simplificada só é permitida até 1 000 € em vendas a retalho, ou até 100 € nos outros casos.", bigFs.map(d => `${docLine(d)} · ${money.format(d.gross)}`));
+
+    // 8. Notas de crédito
+    const ncNoRef = ctx.ncGroups.filter(g => !g.ref).flatMap(g => g.ncs.map(n => `${n.no} · ${money.format(n.gross)}`));
+    const ncOver = ctx.ncGroups.filter(g => g.inv && g.inv.gross - g.credited < -0.005).map(g => `${g.ref}: fatura ${money.format(g.inv.gross)}, creditado ${money.format(g.credited)}`);
+    const ncOut = ctx.ncGroups.filter(g => g.ref && !g.inv).map(g => `${g.ref} ← ${g.ncs.map(n => n.no).join(", ")}`);
+    if (ncNoRef.length) add("bad", `${ncNoRef.length} nota(s) de crédito sem fatura de origem`, "Uma nota de crédito deve indicar a fatura que corrige.", ncNoRef);
+    if (ncOver.length) add("bad", `${ncOver.length} fatura(s) creditada(s) acima do seu valor`, "", ncOver);
+    if (ncOut.length) add("warn", `${ncOut.length} nota(s) de crédito de faturas de outro período`, "A fatura de origem não está neste ficheiro. Confirme no SAF-T do período certo.", ncOut);
+    if (!ncNoRef.length && !ncOver.length && ctx.ncGroups.length) add("ok", "Notas de crédito ligadas às faturas", "");
+
+    // 9. Numeração
+    const gaps = ctx.seriesRows.filter(r => r.missing.length), dups = ctx.seriesRows.filter(r => r.dupes);
+    if (dups.length) add("bad", "Números de documento repetidos", "Cada número só pode existir uma vez por série.", dups.map(r => `${r.series}: ${r.dupes} repetido(s)`));
+    if (gaps.length) add("warn", `${gaps.reduce((a, r) => a + r.missing.length, 0)} número(s) em falta na numeração`, "Pode ser normal se o ficheiro não cobre o início da série; caso contrário, falta exportar documentos.", gaps.map(r => `${r.series}: falta ${r.missing.slice(0, 30).join(", ")}${r.missing.length > 30 ? "…" : ""}`));
+    if (!dups.length && !gaps.length && ctx.seriesRows.length) add("ok", "Numeração seguida em todas as séries", "");
+
+    // 10. Anulados
+    const sales = docs.filter(d => d.origin === "sales"), voided = sales.filter(d => d.status === "A");
+    if (sales.length && voided.length / sales.length > 0.05) add("warn", `${voided.length} de ${sales.length} documentos de venda anulados`, "Mais de 5 % dos documentos foram anulados.", voided.map(d => `${docLine(d)} · ${money.format(d.gross)}`));
+
+    const rank = { bad: 0, warn: 1, ok: 2 };
+    return out.sort((a, b) => rank[a.level] - rank[b.level]);
+  }
+
+  function receivables(data, ncGroups) {
+    const { docs, header: h } = data;
+    const paid = new Map();
+    for (const d of docs) if (d.origin === "pay" && d.status !== "A") for (const s of d.settles) paid.set(s.ref, (paid.get(s.ref) || 0) + s.gross);
+    const credited = new Map(ncGroups.filter(g => g.inv).map(g => [g.ref, g.credited]));
+    const lastDate = docs.reduce((m, d) => d.date > m ? d.date : m, "");
+    const refDate = h.end || lastDate;
+    const ref = new Date(refDate + "T00:00:00");
+    const rows = docs.filter(d => isSale(d) && (d.type === "FT" || d.type === "ND")).map(d => {
+      const p = paid.get(d.no) || 0, c = credited.get(d.no) || 0, open = Math.max(0, d.gross - c - p);
+      const days = Math.max(0, Math.round((ref - new Date(d.date + "T00:00:00")) / 864e5));
+      return { d, paid: p, credited: c, open: open < 0.01 ? 0 : open, days };
+    });
+    const open = rows.filter(r => r.open > 0).sort((a, b) => b.days - a.days);
+    const bucket = (days) => days <= 30 ? 0 : days <= 60 ? 1 : days <= 90 ? 2 : 3;
+    const byClient = new Map();
+    for (const r of open) {
+      const k = r.d.partyId || r.d.party;
+      if (!byClient.has(k)) byClient.set(k, { name: r.d.party, nif: r.d.nif, count: 0, total: 0, b: [0, 0, 0, 0], oldest: 0 });
+      const c = byClient.get(k);
+      c.count++; c.total += r.open; c.b[bucket(r.days)] += r.open; c.oldest = Math.max(c.oldest, r.days);
+    }
+    const totals = { invoiced: rows.reduce((a, r) => a + r.d.gross, 0), open: open.reduce((a, r) => a + r.open, 0), b: [0, 0, 0, 0] };
+    for (const r of open) totals.b[bucket(r.days)] += r.open;
+    return { refDate, rows, open, clients: [...byClient.values()].sort((a, b) => b.total - a.total), totals, paidCount: rows.filter(r => !r.open).length };
+  }
+
+  const monthName = new Intl.DateTimeFormat("pt-PT", { month: "long", year: "numeric" });
+  function monthly(docs) {
+    const m = new Map();
+    for (const d of docs) {
+      if (!isSale(d) || !d.date) continue;
+      const k = d.date.slice(0, 7), sg = sign(d);
+      if (!m.has(k)) m.set(k, { key: k, docs: 0, nc: 0, com: 0, sem: 0, vat: 0 });
+      const r = m.get(k);
+      if (d.type === "NC") r.nc += d.gross; else r.docs++;
+      if (d.lines.length) for (const l of d.lines) { if (l.withVat) r.com += sg * l.amt; else r.sem += sg * l.amt; r.vat += sg * l.vat; }
+      else { if (d.tax > 0) r.com += sg * d.net; else r.sem += sg * d.net; r.vat += sg * d.tax; }
+    }
+    return [...m.values()].sort((a, b) => a.key.localeCompare(b.key)).map(r => Object.assign(r, { net: r.com + r.sem, label: monthName.format(new Date(r.key + "-01T00:00:00")) }));
+  }
+
+  function clientsRank(docs) {
+    const m = new Map();
+    for (const d of docs) {
+      if (!isSale(d)) continue;
+      const k = d.partyId || d.nif || d.party, sg = sign(d);
+      if (!m.has(k)) m.set(k, { name: d.party, nif: d.nif, docs: 0, net: 0, vat: 0, last: "" });
+      const c = m.get(k);
+      if (d.type !== "NC") c.docs++;
+      c.net += sg * d.net; c.vat += sg * d.tax; if (d.date > c.last) c.last = d.date;
+    }
+    const list = [...m.values()].sort((a, b) => b.net - a.net);
+    const total = list.reduce((a, c) => a + c.net, 0);
+    for (const c of list) c.share = total ? c.net / total : 0;
+    return { list, total };
+  }
+
+  function productsRank(docs) {
+    const m = new Map();
+    for (const d of docs) {
+      if (!isSale(d)) continue;
+      for (const l of d.lines) {
+        const k = l.code || l.desc;
+        if (!k) continue;
+        if (!m.has(k)) m.set(k, { code: l.code, desc: l.desc, unit: l.unit, qty: 0, net: 0, docs: new Set() });
+        const p = m.get(k);
+        p.qty += sign(d) * l.qty; p.net += sign(d) * l.amt; p.docs.add(d.no);
+      }
+    }
+    return [...m.values()].sort((a, b) => b.net - a.net);
+  }
+
+  // ---------- rendering ----------
+  let state = { docs: [], shown: 200, filtered: [] };
+
+  function render(data, fileLabel, isSample) {
+    const { header: h, docs, journals } = data;
+    $("fileName").innerHTML = esc(fileLabel) + (isSample ? '<span class="sample">Exemplo</span>' : "");
+    $("error").hidden = true;
+    $("out").hidden = false;
+
+    const kv = (label, value) => value ? `<div class="kv"><span class="eyebrow">${label}</span><span>${esc(value)}</span></div>` : "";
+    $("company").innerHTML =
+      `<div class="name"><span class="eyebrow">Empresa</span><br><strong>${esc(h.company || "Sem nome")}</strong></div>` +
+      kv("NIF", h.nif) + kv("Ano fiscal", h.year) +
+      kv("Período", h.start && `${fmtDate(h.start)} a ${fmtDate(h.end)}`) +
+      kv("Tipo de SAF-T", BASIS[h.basis] ? `${BASIS[h.basis]} (${h.basis})` : h.basis) +
+      kv("Versão", h.version) + kv("Criado em", fmtDate(h.created)) +
+      kv("Software", h.software + (h.cert ? ` · cert. ${h.cert}` : ""));
+
+    const { typeRows, seriesRows } = summarize(docs);
+    const valid = docs.filter(d => d.status !== "A");
+    const voids = docs.length - valid.length;
+    const gaps = seriesRows.reduce((s, r) => s + r.missing.length, 0);
+    const vat = vatSummary(docs);
+    const sumRows = (rs) => rs.reduce((a, r) => (a.billed += r.billed, a.credited += r.credited, a.vat += r.vat, a), { billed: 0, credited: 0, vat: 0 });
+    const tCom = sumRows(vat.com), tSem = sumRows(vat.sem);
+    const ncGroups = creditNotes(docs);
+    const ncCount = docs.filter(d => d.type === "NC" && d.status !== "A").length;
+    const ncTotal = ncGroups.reduce((s, g) => s + g.credited, 0);
+    const checks = buildChecks(data, { vat, ncGroups, seriesRows });
+    const problems = checks.filter(c => c.level !== "ok");
+    const ar = receivables(data, ncGroups);
+    const months = monthly(docs), clients = clientsRank(docs), prods = productsRank(docs);
+
+    const tile = (label, big, sub) => `<div class="tile"><span class="eyebrow">${label}</span><span class="big">${big}</span><span class="sub">${sub}</span></div>`;
+    $("tiles").innerHTML =
+      tile("Documentos", int.format(docs.length), `${typeRows.length} tipo(s) em ${seriesRows.length} série(s)`) +
+      tile("Vendas com IVA", money.format(tCom.billed - tCom.credited), `base líquida · IVA ${money.format(tCom.vat)}`) +
+      tile("Vendas sem IVA", money.format(tSem.billed - tSem.credited), "base líquida, isentas ou não sujeitas") +
+      tile("Notas de crédito", money.format(ncTotal), `${int.format(ncCount)} nota(s), com IVA`) +
+      tile("Por receber", money.format(ar.totals.open), data.hasPayments ? `${int.format(ar.open.length)} fatura(s) em aberto` : "sem recibos no ficheiro") +
+      tile("Alertas", int.format(problems.length), problems.length ? `${problems.filter(c => c.level === "bad").length} erro(s), ${problems.filter(c => c.level === "warn").length} aviso(s)` : "nenhum problema encontrado") +
+      (journals.length ? tile("Lançamentos", int.format(journals.reduce((s, j) => s + j.tx, 0)), `${journals.length} diário(s)`) : "");
+    $("periodNote").textContent = data.customers ? `${int.format(data.customers)} cliente(s) na tabela de clientes` : "";
+
+    // by type
+    const totals = typeRows.reduce((a, t) => (a.c += t.count, a.v += t.void, a));
+    $("byType").innerHTML = `<thead><tr><th>Tipo</th><th>Descrição</th><th>Origem</th><th class="n">Qtd.</th><th class="n">Anulados</th><th>Datas</th><th class="n">Base</th><th class="n">IVA</th><th class="n">Total</th></tr></thead><tbody>` +
+      typeRows.map(t => `<tr><td><span class="code">${esc(t.type)}</span></td><td>${esc(TYPE_NAMES[t.type] || "Tipo não reconhecido")}</td><td class="muted">${ORIGINS[t.origin]}</td>
+        <td class="n">${int.format(t.count)}</td><td class="n">${t.void ? `<span class="pill bad">${t.void}</span>` : '<span class="muted">0</span>'}</td>
+        <td class="num" style="white-space:nowrap">${fmtDate(t.first)}${t.last !== t.first ? " → " + fmtDate(t.last) : ""}</td>
+        <td class="n">${money.format(t.net)}</td><td class="n">${money.format(t.tax)}</td><td class="n">${money.format(t.gross)}</td></tr>`).join("") +
+      `</tbody><tfoot><tr><td colspan="3">Total de documentos</td><td class="n">${int.format(docs.length)}</td><td class="n">${int.format(voids)}</td><td colspan="4"></td></tr></tfoot>`;
+    if (!typeRows.length) $("byType").innerHTML = '<tbody><tr><td class="muted">Este ficheiro não tem documentos comerciais.</td></tr></tbody>';
+
+    // com / sem IVA
+    const vatRow = (r) => `<tr><td><strong>${esc(r.label)}</strong>${r.sub ? `<div class="muted small">${esc(r.sub)}</div>` : ""}</td>
+      <td class="n">${int.format(r.docs.size)}</td><td class="n">${money.format(r.billed)}</td><td class="n">${r.credited ? "−" + money.format(r.credited) : '<span class="muted">—</span>'}</td>
+      <td class="n">${money.format(r.billed - r.credited)}</td><td class="n">${money.format(r.vat)}</td></tr>`;
+    const vatSub = (label, t) => `<tr class="subtotal"><td>${label}</td><td></td><td class="n">${money.format(t.billed)}</td><td class="n">${t.credited ? "−" + money.format(t.credited) : ""}</td><td class="n">${money.format(t.billed - t.credited)}</td><td class="n">${money.format(t.vat)}</td></tr>`;
+    const vatGroup = (title, pill, rs, t) => rs.length
+      ? `<tr class="group"><td colspan="6"><span class="pill ${pill}">${title}</span></td></tr>` + rs.map(vatRow).join("") + vatSub("Subtotal " + title[0].toLowerCase() + title.slice(1), t)
+      : "";
+    $("byVat").innerHTML = (vat.com.length || vat.sem.length)
+      ? `<thead><tr><th>Enquadramento</th><th class="n">Docs.</th><th class="n">Base faturada</th><th class="n">Notas de crédito</th><th class="n">Base líquida</th><th class="n">IVA líquido</th></tr></thead><tbody>` +
+        vatGroup("Com IVA", "ok", vat.com, tCom) + vatGroup("Sem IVA", "warn", vat.sem, tSem) +
+        `</tbody><tfoot>${vatSub("Total de vendas", sumRows([tCom, tSem]))}</tfoot>`
+      : '<tbody><tr><td class="muted">Este ficheiro não tem documentos de venda.</td></tr></tbody>';
+
+    // notas de crédito por fatura
+    $("ncByInvoice").innerHTML = ncGroups.length
+      ? `<thead><tr><th>Fatura de origem</th><th>Data</th><th>Cliente</th><th class="n">Total da fatura</th><th>Notas de crédito</th><th class="n">Creditado</th><th class="n">Saldo</th><th>Situação</th></tr></thead><tbody>` +
+        ncGroups.map(g => {
+          const inv = g.inv, saldo = inv ? inv.gross - g.credited : null;
+          let sit;
+          if (!g.ref) sit = '<span class="pill bad">Sem fatura indicada</span>';
+          else if (!inv) sit = '<span class="pill warn">Fatura não está neste ficheiro</span>';
+          else if (inv.status === "A") sit = '<span class="pill bad">Fatura anulada</span>';
+          else if (saldo < -0.005) sit = '<span class="pill bad">Crédito maior que a fatura</span>';
+          else if (Math.abs(saldo) <= 0.005) sit = '<span class="pill ok">Totalmente creditada</span>';
+          else sit = '<span class="pill neutral">Parcialmente creditada</span>';
+          const ncList = g.ncs.map(n => `<div class="nc"><span class="num">${esc(n.no)}</span> <span class="muted">· ${fmtDate(n.date)} · ${money.format(n.gross)}</span>${n.reason ? `<div class="muted small">${esc(n.reason)}</div>` : ""}</div>`).join("");
+          return `<tr><td class="num" style="white-space:nowrap">${g.ref ? esc(g.ref) : '<span class="muted">—</span>'}</td>
+            <td class="num" style="white-space:nowrap">${inv ? fmtDate(inv.date) : ""}</td><td>${esc(inv ? inv.party : g.ncs[0].party || "")}</td>
+            <td class="n">${inv ? money.format(inv.gross) : '<span class="muted">—</span>'}</td><td>${ncList}</td>
+            <td class="n">${money.format(g.credited)}</td><td class="n">${saldo === null ? '<span class="muted">—</span>' : money.format(saldo)}</td><td>${sit}</td></tr>`;
+        }).join("") +
+        `</tbody><tfoot><tr><td colspan="5">${int.format(ncCount)} nota(s) de crédito em ${int.format(ncGroups.length)} fatura(s)</td><td class="n">${money.format(ncTotal)}</td><td colspan="2"></td></tr></tfoot>`
+      : '<tbody><tr><td class="muted">Este ficheiro não tem notas de crédito.</td></tr></tbody>';
+
+    // alertas
+    $("alertCount").textContent = problems.length ? problems.length : "";
+    const LEVEL = { bad: "Erro", warn: "Aviso", ok: "Certo" };
+    $("checks").innerHTML = checks.map(c => `<div class="check ${c.level}">
+        <span class="pill ${c.level}">${LEVEL[c.level]}</span><span class="what">${esc(c.what)}</span>
+        ${c.why ? `<span class="why">${esc(c.why)}</span>` : ""}
+        ${c.items.length ? `<details${c.items.length <= 3 && c.level !== "ok" ? " open" : ""}><summary>Ver ${c.items.length} caso(s)</summary><ul>${c.items.slice(0, 200).map(i => `<li class="num small">${esc(i)}</li>`).join("")}${c.items.length > 200 ? `<li class="muted">e mais ${c.items.length - 200}…</li>` : ""}</ul></details>` : ""}
+      </div>`).join("");
+
+    // por receber
+    $("arWarn").hidden = data.hasPayments;
+    $("arWarn").textContent = `Este SAF-T não tem recibos (secção Payments). É normal no SAF-T de faturação enviado à ${CUR.tax}. Por isso não é possível saber o que foi pago: os valores abaixo tratam todas as faturas como em aberto.`;
+    $("arNote").textContent = `Faturas (FT) e notas de débito (ND) menos notas de crédito e recibos deste ficheiro. Antiguidade contada até ${fmtDate(ar.refDate)}.`;
+    $("arTiles").innerHTML =
+      tile("Em aberto", money.format(ar.totals.open), `${int.format(ar.open.length)} de ${int.format(ar.rows.length)} faturas`) +
+      tile("Até 30 dias", money.format(ar.totals.b[0]), "") + tile("31 a 60 dias", money.format(ar.totals.b[1]), "") +
+      tile("61 a 90 dias", money.format(ar.totals.b[2]), "") + tile("Mais de 90 dias", money.format(ar.totals.b[3]), ar.totals.b[3] ? "cobrança atrasada" : "");
+    $("arClients").innerHTML = ar.clients.length
+      ? `<thead><tr><th>Cliente</th><th class="n">Faturas</th><th class="n">Em aberto</th><th class="n">&gt; 60 dias</th><th class="n">Mais antiga</th></tr></thead><tbody>` +
+        ar.clients.slice(0, 30).map(c => `<tr><td>${esc(c.name || "")}<div class="muted small num">${esc(c.nif || "")}</div></td><td class="n">${c.count}</td><td class="n">${money.format(c.total)}</td>
+          <td class="n">${c.b[2] + c.b[3] ? `<span class="pill ${c.b[3] ? "bad" : "warn"}">${money.format(c.b[2] + c.b[3])}</span>` : '<span class="muted">—</span>'}</td><td class="n">${c.oldest} dias</td></tr>`).join("") + "</tbody>"
+      : '<tbody><tr><td class="muted">Nenhuma fatura em aberto.</td></tr></tbody>';
+    $("arOpen").innerHTML = ar.open.length
+      ? `<thead><tr><th>Fatura</th><th>Cliente</th><th class="n">Total</th><th class="n">Pago / creditado</th><th class="n">Em aberto</th><th class="n">Dias</th></tr></thead><tbody>` +
+        ar.open.slice(0, 100).map(r => `<tr><td class="num" style="white-space:nowrap">${esc(r.d.no)}<div class="muted small">${fmtDate(r.d.date)}</div></td><td>${esc(r.d.party || "")}</td><td class="n">${money.format(r.d.gross)}</td>
+          <td class="n">${r.paid + r.credited ? money.format(r.paid + r.credited) : '<span class="muted">—</span>'}</td><td class="n">${money.format(r.open)}</td>
+          <td class="n"><span class="pill ${r.days > 90 ? "bad" : r.days > 60 ? "warn" : "neutral"}">${r.days}</span></td></tr>`).join("") +
+        (ar.open.length > 100 ? `<tr><td colspan="6" class="muted">e mais ${ar.open.length - 100} faturas…</td></tr>` : "") + "</tbody>"
+      : '<tbody><tr><td class="muted">Nenhuma fatura em aberto.</td></tr></tbody>';
+
+    // mês a mês
+    const maxM = Math.max(1, ...months.map(m => Math.abs(m.net)));
+    $("byMonth").innerHTML = months.length
+      ? `<thead><tr><th>Mês</th><th class="n">Docs.</th><th class="n">Com IVA</th><th class="n">Sem IVA</th><th class="n">IVA</th><th class="n">Notas de crédito</th><th class="n">Base líquida</th><th></th></tr></thead><tbody>` +
+        months.map(m => `<tr><td style="white-space:nowrap">${esc(m.label)}</td><td class="n">${m.docs}</td><td class="n">${money.format(m.com)}</td><td class="n">${money.format(m.sem)}</td><td class="n">${money.format(m.vat)}</td>
+          <td class="n">${m.nc ? "−" + money.format(m.nc) : '<span class="muted">—</span>'}</td><td class="n"><strong>${money.format(m.net)}</strong></td>
+          <td class="barcell"><div class="bar${m.net < 0 ? " neg" : ""}" style="width:${(Math.abs(m.net) / maxM * 100).toFixed(1)}%"></div></td></tr>`).join("") +
+        `</tbody><tfoot><tr><td>Total</td><td class="n">${months.reduce((a, m) => a + m.docs, 0)}</td><td class="n">${money.format(months.reduce((a, m) => a + m.com, 0))}</td><td class="n">${money.format(months.reduce((a, m) => a + m.sem, 0))}</td><td class="n">${money.format(months.reduce((a, m) => a + m.vat, 0))}</td><td class="n">−${money.format(months.reduce((a, m) => a + m.nc, 0))}</td><td class="n">${money.format(months.reduce((a, m) => a + m.net, 0))}</td><td></td></tr></tfoot>`
+      : '<tbody><tr><td class="muted">Sem vendas.</td></tr></tbody>';
+
+    // clientes
+    const top3 = clients.list.slice(0, 3).reduce((a, c) => a + c.share, 0);
+    $("topClientsTitle").textContent = clients.list.length > 3 ? `Maiores clientes · os 3 primeiros valem ${Math.round(top3 * 100)} % das vendas` : "Maiores clientes";
+    const topC = clients.list.slice(0, 12), restC = clients.list.slice(12);
+    $("topClients").innerHTML = clients.list.length
+      ? `<thead><tr><th>Cliente</th><th class="n">Docs.</th><th class="n">Base líquida</th><th class="n">Peso</th><th class="n">Última</th></tr></thead><tbody>` +
+        topC.map(c => `<tr><td>${esc(c.name || "")}<div class="muted small num">${esc(c.nif || "")}</div></td><td class="n">${c.docs}</td><td class="n">${money.format(c.net)}</td><td class="n">${(c.share * 100).toFixed(1).replace(".", ",")} %</td><td class="n">${fmtDate(c.last)}</td></tr>`).join("") +
+        (restC.length ? `<tr><td class="muted">Outros ${restC.length} clientes</td><td class="n">${restC.reduce((a, c) => a + c.docs, 0)}</td><td class="n">${money.format(restC.reduce((a, c) => a + c.net, 0))}</td><td class="n">${(restC.reduce((a, c) => a + c.share, 0) * 100).toFixed(1).replace(".", ",")} %</td><td></td></tr>` : "") + "</tbody>"
+      : '<tbody><tr><td class="muted">Sem vendas.</td></tr></tbody>';
+
+    // produtos
+    $("topProducts").innerHTML = prods.length
+      ? `<thead><tr><th>Produto / serviço</th><th class="n">Qtd.</th><th class="n">Docs.</th><th class="n">Base líquida</th></tr></thead><tbody>` +
+        prods.slice(0, 12).map(p => `<tr><td>${esc(p.desc || p.code)}${p.code && p.code !== p.desc ? `<div class="muted small num">${esc(p.code)}</div>` : ""}</td><td class="n">${String(+p.qty.toFixed(3)).replace(".", ",")}${p.unit ? " " + esc(p.unit) : ""}</td><td class="n">${p.docs.size}</td><td class="n">${money.format(p.net)}</td></tr>`).join("") + "</tbody>"
+      : '<tbody><tr><td class="muted">O ficheiro não traz linhas de produto.</td></tr></tbody>';
+
+    // contexto para as perguntas ao Claude
+    ask.reset({
+      empresa: { nome: h.company, nif: h.nif, periodo: `${h.start} a ${h.end}`, tipo_saft: BASIS[h.basis] || h.basis },
+      resumo: { documentos: docs.length, vendas_com_iva_base: +(tCom.billed - tCom.credited).toFixed(2), iva_liquido: +tCom.vat.toFixed(2), vendas_sem_iva_base: +(tSem.billed - tSem.credited).toFixed(2), notas_credito_total: +ncTotal.toFixed(2), anulados: voids },
+      iva_por_taxa: vat.com.map(r => ({ taxa: r.label, base_liquida: +(r.billed - r.credited).toFixed(2), iva: +r.vat.toFixed(2) })),
+      sem_iva_por_isencao: vat.sem.map(r => ({ codigo: r.label, motivo: r.sub, base_liquida: +(r.billed - r.credited).toFixed(2) })),
+      por_mes: months.map(m => ({ mes: m.key, com_iva: +m.com.toFixed(2), sem_iva: +m.sem.toFixed(2), iva: +m.vat.toFixed(2), notas_credito: +m.nc.toFixed(2), base_liquida: +m.net.toFixed(2), documentos: m.docs })),
+      maiores_clientes: clients.list.slice(0, 25).map(c => ({ cliente: c.name, nif: c.nif, base_liquida: +c.net.toFixed(2), peso_pct: +(c.share * 100).toFixed(1), documentos: c.docs })),
+      numero_total_clientes: clients.list.length,
+      produtos_top: prods.slice(0, 20).map(p => ({ produto: p.desc, codigo: p.code, qtd: +p.qty.toFixed(3), base_liquida: +p.net.toFixed(2) })),
+      por_receber: { tem_recibos_no_ficheiro: data.hasPayments, data_referencia: ar.refDate, total_em_aberto: +ar.totals.open.toFixed(2), ate_30d: +ar.totals.b[0].toFixed(2), d31_60: +ar.totals.b[1].toFixed(2), d61_90: +ar.totals.b[2].toFixed(2), mais_90d: +ar.totals.b[3].toFixed(2),
+        por_cliente: ar.clients.slice(0, 20).map(c => ({ cliente: c.name, em_aberto: +c.total.toFixed(2), faturas: c.count, dias_mais_antiga: c.oldest })) },
+      alertas: checks.map(c => ({ nivel: LEVEL[c.level], alerta: c.what, explicacao: c.why, exemplos: c.items.slice(0, 8) }))
+    }, { docs, ar });
+
+    // by series
+    $("bySeries").innerHTML = `<thead><tr><th>Série</th><th>Tipo</th><th class="n">Qtd.</th><th class="n">Primeiro</th><th class="n">Último</th><th>Numeração</th></tr></thead><tbody>` +
+      seriesRows.map(s => {
+        let state;
+        if (s.dupes) state = `<span class="pill bad">${s.dupes} duplicado(s)</span>`;
+        else if (s.missing.length) state = `<span class="pill warn">${s.missing.length} em falta</span> <span class="muted num">${s.missing.slice(0, 12).join(", ")}${s.missing.length > 12 ? "…" : ""}</span>`;
+        else state = '<span class="pill ok">Seguida</span>';
+        return `<tr><td class="num">${esc(s.series)}</td><td><span class="code">${esc(s.type)}</span></td><td class="n">${int.format(s.count)}</td><td class="n">${s.min ?? "—"}</td><td class="n">${s.max ?? "—"}</td><td>${state}</td></tr>`;
+      }).join("") + "</tbody>";
+    if (!seriesRows.length) $("bySeries").innerHTML = '<tbody><tr><td class="muted">Sem séries.</td></tr></tbody>';
+
+    // journals
+    $("glBlock").hidden = !journals.length;
+    $("journals").innerHTML = `<thead><tr><th>Diário</th><th>Descrição</th><th class="n">Lançamentos</th><th class="n">Linhas</th><th class="n">Débito</th><th class="n">Crédito</th></tr></thead><tbody>` +
+      journals.map(j => `<tr><td class="num">${esc(j.id)}</td><td>${esc(j.desc)}</td><td class="n">${int.format(j.tx)}</td><td class="n">${int.format(j.lines)}</td><td class="n">${money.format(j.debit)}</td><td class="n">${money.format(j.credit)}</td></tr>`).join("") + "</tbody>";
+
+    // doc list
+    const sel = $("fType");
+    sel.innerHTML = '<option value="">Todos os tipos</option>' + typeRows.map(t => `<option value="${esc(t.type)}">${esc(t.type)} · ${esc(TYPE_NAMES[t.type] || t.type)}</option>`).join("");
+    state.docs = docs.slice().sort((a, b) => a.series.localeCompare(b.series) || a.seq - b.seq);
+    state.shown = 200;
+    renderDocs();
+  }
+
+  function renderDocs() {
+    const q = $("q").value.trim().toLowerCase(), ft = $("fType").value, fs = $("fStatus").value, fv = $("fVat").value;
+    state.filtered = state.docs.filter(d =>
+      (!ft || d.type === ft) && (!fv || d.vatClass === fv) && (!fs || (fs === "A" ? d.status === "A" : d.status !== "A")) &&
+      (!q || d.no.toLowerCase().includes(q) || d.refs.some(r => r.toLowerCase().includes(q)) || (d.party || "").toLowerCase().includes(q) || (d.nif || "").includes(q)));
+    const rows = state.filtered.slice(0, state.shown);
+    $("docs").innerHTML = `<thead><tr><th>Documento</th><th>Data</th><th>Cliente / fornecedor</th><th>NIF</th><th>Estado</th><th>IVA</th><th class="n">Base</th><th class="n">IVA</th><th class="n">Total</th></tr></thead><tbody>` +
+      rows.map(d => {
+        const [label, cls] = STATUS[d.status] || [d.status, "warn"];
+        return `<tr class="${d.status === "A" ? "void" : ""}"><td class="num" style="white-space:nowrap"><span class="docno">${esc(d.no)}</span>${d.refs.length ? `<div class="muted small">→ ${d.refs.map(esc).join(", ")}</div>` : ""}</td><td class="num" style="white-space:nowrap">${fmtDate(d.date)}</td>
+          <td>${esc(d.party || "")}</td><td class="num">${esc(d.nif || "")}</td><td><span class="pill ${cls}">${label}</span></td><td>${VAT_PILL[d.vatClass] || ""}</td>
+          <td class="n">${money.format(d.net)}</td><td class="n">${money.format(d.tax)}</td><td class="n">${money.format(d.gross)}</td></tr>`;
+      }).join("") +
+      (rows.length ? "" : '<tr><td colspan="9" class="muted">Nenhum documento corresponde aos filtros.</td></tr>') + "</tbody>";
+    const rest = state.filtered.length - rows.length;
+    $("more").hidden = rest <= 0;
+    $("more").textContent = `Mostrar mais (${int.format(rest)} restantes)`;
+  }
+
+  function toTSV() {
+    const n = (v) => v.toFixed(2).replace(".", ",");
+    const lines = [["Documento", "Tipo", "Série", "Data", "Cliente/fornecedor", "NIF", "Estado", "Enquadramento IVA", "Fatura de origem", "Base", "IVA", "Total"].join("\t")];
+    for (const d of state.filtered) lines.push([d.no, d.type, d.series, d.date, d.party || "", d.nif || "", (STATUS[d.status] || [d.status])[0], VAT_LABEL[d.vatClass] || "", d.refs.join(", "), n(d.net), n(d.tax), n(d.gross)].join("\t"));
+    return lines.join("\n");
+  }
+
+  // ---------- perguntas ao Claude ----------
+  const ask = (() => {
+    let sample = null, toolsOK = false, context = null, data = null, turns = [], ctl = null;
+    const SUGGESTIONS = [
+      "Explica os alertas e diz-me o que devo corrigir primeiro",
+      "Qual foi o melhor mês e porquê?",
+      "Que clientes me devem mais e há quanto tempo?",
+      "Quanto IVA tenho a entregar neste período?",
+      "Que produtos mais vendi?"
+    ];
+    const brief = (d) => ({ numero: d.no, tipo: d.type, data: d.date, cliente: d.party, nif: d.nif, estado: d.status === "A" ? "anulado" : "normal",
+      iva: d.vatClass || undefined, base: d.net, imposto: d.tax, total: d.gross, refere: d.refs.length ? d.refs : undefined });
+    const tools = () => [
+      { name: "procurar_documentos",
+        description: "Procura documentos deste SAF-T e devolve quantos encontrou, as somas (base, imposto, total) e até 40 documentos. Usa para perguntas sobre um cliente, um tipo de documento, um intervalo de datas ou um número.",
+        inputSchema: { type: "object", properties: {
+          texto: { type: "string", description: "Parte do nome do cliente, NIF ou número do documento" },
+          tipo: { type: "string", description: "Código do tipo: FT, FS, FR, NC, ND, GR, GT, OR, PF, RG…" },
+          de: { type: "string", description: "Data inicial AAAA-MM-DD" }, ate: { type: "string", description: "Data final AAAA-MM-DD" },
+          iva: { type: "string", enum: ["com", "sem", "misto"] }, incluir_anulados: { type: "boolean" } } },
+        execute(i) {
+          const t = String(i.texto || "").toLowerCase();
+          const r = data.docs.filter(d => (!i.tipo || d.type === String(i.tipo).toUpperCase()) && (i.incluir_anulados || d.status !== "A") &&
+            (!i.de || d.date >= i.de) && (!i.ate || d.date <= i.ate) && (!i.iva || d.vatClass === i.iva) &&
+            (!t || d.no.toLowerCase().includes(t) || (d.party || "").toLowerCase().includes(t) || (d.nif || "").includes(t)));
+          const sum = (f) => +r.reduce((a, d) => a + f(d), 0).toFixed(2);
+          return { encontrados: r.length, soma_base: sum(d => d.net), soma_imposto: sum(d => d.tax), soma_total: sum(d => d.gross), documentos: r.slice(0, 40).map(brief) };
+        } },
+      { name: "faturas_em_aberto",
+        description: "Lista as faturas ainda por receber (total, pago, creditado, em aberto, dias), opcionalmente de um cliente. Devolve até 40.",
+        inputSchema: { type: "object", properties: { cliente: { type: "string", description: "Parte do nome ou NIF do cliente" } } },
+        execute(i) {
+          const t = String(i.cliente || "").toLowerCase();
+          const r = data.ar.open.filter(x => !t || (x.d.party || "").toLowerCase().includes(t) || (x.d.nif || "").includes(t));
+          return { faturas: r.length, total_em_aberto: +r.reduce((a, x) => a + x.open, 0).toFixed(2),
+            lista: r.slice(0, 40).map(x => ({ numero: x.d.no, data: x.d.date, cliente: x.d.party, total: x.d.gross, pago: +x.paid.toFixed(2), creditado: +x.credited.toFixed(2), em_aberto: +x.open.toFixed(2), dias: x.days })) };
+        } }
+    ];
+    const md = (text) => {
+      const blocks = esc(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").split(/\n{2,}/);
+      return blocks.map(b => {
+        const lines = b.split("\n");
+        if (lines.every(l => /^\s*([-*•]|\d+\.)\s/.test(l))) return "<ul>" + lines.map(l => "<li>" + l.replace(/^\s*([-*•]|\d+\.)\s/, "") + "</li>").join("") + "</ul>";
+        return "<p>" + lines.join("<br>") + "</p>";
+      }).join("");
+    };
+    const COPY = {
+      not_granted: "Não deu autorização para esta página usar o Claude.", sampling_disabled: "O Claude não está disponível nesta conta.",
+      rate_limited: "Demasiadas perguntas seguidas. Espere um pouco e tente outra vez.", session_expired: "A sessão expirou. Volte a entrar no Claude.",
+      prompt_too_large: "O ficheiro é grande demais para enviar assim. Faça uma pergunta mais concreta.", refused: "O Claude não respondeu a esta pergunta. Reformule-a.",
+      empty_completion: "O Claude não devolveu resposta. Reformule a pergunta."
+    };
+    const HIDE = ["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"];
+
+    function setBusy(b) { $("askBtn").disabled = b; $("stopBtn").hidden = !b; }
+    function off(msg) { $("askOn").hidden = true; $("askOff").hidden = false; $("askOff").textContent = msg; }
+
+    async function send(question) {
+      if (!sample || !question.trim() || ctl) return;
+      const qEl = document.createElement("div"); qEl.className = "msg q"; qEl.textContent = question;
+      const aEl = document.createElement("div"); aEl.className = "msg a"; aEl.textContent = "A pensar…";
+      $("convo").append(qEl, aEl); aEl.scrollIntoView({ block: "nearest" });
+      $("askInput").value = "";
+      const RULES = `És um assistente de contabilidade e fiscalidade. O utilizador abriu um ficheiro SAF-T de faturação e quer perceber os números.
+Responde em português, de forma curta e clara, em frases simples. Moeda: ${CUR.name} (escreve os valores como ${money.format(1234567.5)}).
+Usa só os dados abaixo${toolsOK ? " e as ferramentas (para pormenores de documentos ou clientes)" : ""}. Não inventes números. Se os dados não chegam para responder, diz o que falta.
+Dados do ficheiro (JSON):
+${JSON.stringify(context)}`;
+      turns.push({ role: "user", content: question });
+      const input = [{ role: "user", content: RULES }, ...turns.slice(-8)];
+      ctl = new AbortController(); setBusy(true);
+      try {
+        const opts = { signal: ctl.signal, cache: false, onText: ({ text }) => { aEl.innerHTML = md(text); } };
+        if (toolsOK) { delete opts.cache; opts.tools = tools(); }
+        const { text, truncated } = await sample(input, opts);
+        aEl.innerHTML = md(text) + (truncated ? '<div class="meta">A resposta foi cortada. Peça menos de cada vez.</div>' : "");
+        turns.push({ role: "assistant", content: text });
+      } catch (e) {
+        turns.pop();
+        if (HIDE.includes(e.code)) { aEl.remove(); qEl.remove(); off(COPY[e.code] || "O Claude não está disponível nesta página."); }
+        else if (e.code === "cancelled") aEl.innerHTML = e.text ? md(e.text) + '<div class="meta">Parado.</div>' : '<span class="muted">Parado.</span>';
+        else aEl.innerHTML = (e.text ? md(e.text) : "") + `<div class="meta">${esc(COPY[e.code] || "Falhou a ligação ao Claude. Tente outra vez.")}</div>`;
+      } finally { ctl = null; setBusy(false); }
+    }
+
+    $("chips").innerHTML = SUGGESTIONS.map((q, i) => `<button type="button" class="chip" data-i="${i}">${esc(q)}</button>`).join("");
+    $("chips").addEventListener("click", e => { const b = e.target.closest(".chip"); if (b) send(SUGGESTIONS[+b.dataset.i]); });
+    $("askForm").addEventListener("submit", e => { e.preventDefault(); send($("askInput").value); });
+    $("askInput").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send($("askInput").value); } });
+    $("stopBtn").addEventListener("click", () => ctl?.abort());
+
+    (async () => {
+      // fora do claude.ai (link simples ou ficheiro no computador) a secção não aparece
+      const hide = () => { $("perguntar").hidden = true; document.querySelector('nav.jump a[href="#perguntar"]').hidden = true; };
+      if (!window.claude?.use) return hide();
+      sample = await window.claude.use("sample").catch(() => null);
+      if (!sample) return hide();
+      const lim = await sample.limits().catch(() => null);
+      toolsOK = !!lim?.tools;
+      $("askOff").hidden = true; $("askOn").hidden = false;
+      $("perguntar").hidden = false; document.querySelector('nav.jump a[href="#perguntar"]').hidden = false;
+    })();
+
+    return {
+      reset(ctx, d) { context = ctx; data = d; turns = []; ctl?.abort(); $("convo").innerHTML = ""; }
+    };
+  })();
+
+  // ---------- events ----------
+  function showError(msg) { $("error").textContent = msg; $("error").hidden = false; }
+
+  function loadFile(file) {
+    if (!file) return;
+    $("fileName").textContent = `A ler ${file.name}…`;
+    file.arrayBuffer().then(buf => {
+      try { render(parse(decode(buf)), `${file.name} · ${(file.size / 1048576).toFixed(1)} MB`, false); }
+      catch (e) { $("out").hidden = true; $("fileName").textContent = file.name; showError(e.message); }
+    });
+  }
+
+  $("file").addEventListener("change", e => loadFile(e.target.files[0]));
+  const drop = $("drop");
+  ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", e => loadFile(e.dataTransfer.files[0]));
+  ["q", "fType", "fVat", "fStatus"].forEach(id => $(id).addEventListener("input", () => { state.shown = 200; renderDocs(); }));
+  $("more").addEventListener("click", () => { state.shown += 500; renderDocs(); });
+  $("copy").addEventListener("click", () => {
+    const text = toTSV();
+    const done = () => { $("toast").textContent = `${int.format(state.filtered.length)} documento(s) copiados. Cole no Excel.`; setTimeout(() => $("toast").textContent = "", 4000); };
+    const fallback = () => {
+      const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); done(); } catch (e) { $("toast").textContent = "Não foi possível copiar."; }
+      ta.remove();
+    };
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  });
+
+  // ---------- ficheiro de exemplo (dados fictícios, Angola) ----------
+  const SAMPLE = (() => {
+    const NS = "urn:OECD:StandardAuditFile-Tax:AO_1.01_01";
+    const EX = { M02: "Transmissão de bens e serviço não sujeita", M11: "Isento — exportação de bens (artigo 14.º do CIVA)" };
+    const PROD = { CIM: ["Cimento Portland 50 kg", "UN"], VAR: ["Varão de aço 12 mm", "UN"], TIN: ["Tinta plástica 20 L", "UN"], TRP: ["Serviço de transporte", "SRV"], ARR: ["Arroz 25 kg", "UN"] };
+    const ctl = { n: 0, deb: 0, cre: 0 };
+    // linhas: [produto, quantidade, preço, taxa %, código de isenção, fatura de origem]
+    const inv = (no, type, date, cust, lines, status = "N") => {
+      let net = 0, tax = 0;
+      const xml = lines.map(([pc, q, price, pct, ex, ref], i) => {
+        const amt = q * price; net += amt; tax += amt * pct / 100;
+        if (status !== "A") { if (type === "NC") ctl.deb += amt; else ctl.cre += amt; }
+        const tag = type === "NC" ? "DebitAmount" : "CreditAmount";
+        return `<Line><LineNumber>${i + 1}</LineNumber><ProductCode>${pc}</ProductCode><ProductDescription>${PROD[pc][0]}</ProductDescription><Quantity>${q}</Quantity><UnitOfMeasure>${PROD[pc][1]}</UnitOfMeasure><UnitPrice>${price}</UnitPrice>${ref ? `<References><Reference>${ref}</Reference><Reason>Devolução de mercadoria</Reason></References>` : ""}<${tag}>${amt}</${tag}><Tax><TaxType>IVA</TaxType><TaxCountryRegion>AO</TaxCountryRegion><TaxCode>${pct ? "NOR" : "ISE"}</TaxCode><TaxPercentage>${pct}</TaxPercentage></Tax>${ex ? `<TaxExemptionReason>${EX[ex]}</TaxExemptionReason><TaxExemptionCode>${ex}</TaxExemptionCode>` : ""}</Line>`;
+      }).join("");
+      ctl.n++;
+      tax = +tax.toFixed(2);
+      return `<Invoice><InvoiceNo>${no}</InvoiceNo><DocumentStatus><InvoiceStatus>${status}</InvoiceStatus></DocumentStatus><InvoiceDate>${date}</InvoiceDate><InvoiceType>${type}</InvoiceType><CustomerID>${cust}</CustomerID>${xml}<DocumentTotals><TaxPayable>${tax}</TaxPayable><NetTotal>${net}</NetTotal><GrossTotal>${(net + tax).toFixed(2)}</GrossTotal></DocumentTotals></Invoice>`;
+    };
+    const mov = (no, date, cust) => `<StockMovement><DocumentNumber>${no}</DocumentNumber><DocumentStatus><MovementStatus>N</MovementStatus></DocumentStatus><MovementDate>${date}</MovementDate><MovementType>GT</MovementType><CustomerID>${cust}</CustomerID><DocumentTotals><TaxPayable>0</TaxPayable><NetTotal>0</NetTotal><GrossTotal>0</GrossTotal></DocumentTotals></StockMovement>`;
+    const wrk = (no, type, date, cust, net) => `<WorkDocument><DocumentNumber>${no}</DocumentNumber><DocumentStatus><WorkStatus>N</WorkStatus></DocumentStatus><WorkDate>${date}</WorkDate><WorkType>${type}</WorkType><CustomerID>${cust}</CustomerID><DocumentTotals><TaxPayable>${net * .14}</TaxPayable><NetTotal>${net}</NetTotal><GrossTotal>${net * 1.14}</GrossTotal></DocumentTotals></WorkDocument>`;
+    // recibo: [fatura, valor pago com IVA]
+    const pay = (no, date, cust, items) => {
+      const gross = items.reduce((a, [, v]) => a + v, 0);
+      const lines = items.map(([ref, v], i) => `<Line><LineNumber>${i + 1}</LineNumber><SourceDocumentID><OriginatingON>${ref}</OriginatingON></SourceDocumentID><CreditAmount>${v}</CreditAmount></Line>`).join("");
+      return `<Payment><PaymentRefNo>${no}</PaymentRefNo><TransactionDate>${date}</TransactionDate><PaymentType>RG</PaymentType><DocumentStatus><PaymentStatus>N</PaymentStatus></DocumentStatus><CustomerID>${cust}</CustomerID>${lines}<DocumentTotals><TaxPayable>0</TaxPayable><NetTotal>${gross}</NetTotal><GrossTotal>${gross}</GrossTotal></DocumentTotals></Payment>`;
+    };
+    const cust = (id, name, nif) => `<Customer><CustomerID>${id}</CustomerID><CustomerTaxID>${nif}</CustomerTaxID><CompanyName>${name}</CompanyName></Customer>`;
+    const sales = [
+      inv("FT A/1", "FT", "2026-07-03", "C1", [["CIM", 400, 6500, 14], ["TRP", 1, 120000, 14]]),
+      inv("FT A/2", "FT", "2026-07-11", "C2", [["VAR", 300, 4200, 14]]),
+      inv("FT A/3", "FT", "2026-07-18", "C4", [["CIM", 1500, 6200, 0, "M11"]]),
+      inv("FT A/4", "FT", "2026-07-25", "C5", [["TIN", 40, 38000, 14]]),
+      inv("FT A/5", "FT", "2026-08-02", "C1", [["CIM", 600, 6500, 14], ["VAR", 200, 4200, 14]]),
+      inv("FT A/6", "FT", "2026-08-09", "C2", [["TIN", 25, 38000, 14]], "A"),
+      inv("FT A/7", "FT", "2026-08-16", "C3", [["ARR", 300, 21000, 5]]),
+      inv("FT A/9", "FT", "2026-08-30", "C2", [["TIN", 25, 37000, 14], ["TRP", 1, 90000, 0]]),
+      inv("FT A/10", "FT", "2026-09-06", "C1", [["CIM", 800, 6600, 14], ["TRP", 2, 120000, 14]]),
+      inv("FT A/11", "FT", "2026-09-15", "C5", [["VAR", 500, 4300, 14]]),
+      inv("FT A/12", "FT", "2026-09-27", "C3", [["ARR", 450, 21500, 5], ["TRP", 1, 60000, 0, "M02"]]),
+      inv("FR A/1", "FR", "2026-07-08", "C9", [["CIM", 20, 7000, 14]]),
+      inv("FR A/2", "FR", "2026-08-21", "C9", [["TIN", 2, 39000, 14]]),
+      inv("FR A/3", "FR", "2026-09-19", "C9", [["ARR", 10, 22000, 5]]),
+      inv("NC A/1", "NC", "2026-07-29", "C2", [["VAR", 40, 4200, 14, null, "FT A/2"]]),
+      inv("NC A/2", "NC", "2026-08-20", "C4", [["CIM", 1500, 6200, 0, "M11", "FT A/3"]]),
+      inv("NC A/3", "NC", "2026-09-10", "C1", [["CIM", 50, 6500, 14, null, "FT A/5"]]),
+      inv("NC A/4", "NC", "2026-09-22", "C5", [["TIN", 3, 36000, 14, null, "FT B/48"]])
+    ].join("");
+    const body = `<?xml version="1.0" encoding="UTF-8"?><AuditFile xmlns="${NS}"><Header><AuditFileVersion>1.01_01</AuditFileVersion><CompanyID>5000000000</CompanyID><TaxRegistrationNumber>5000000000</TaxRegistrationNumber><TaxAccountingBasis>F</TaxAccountingBasis><CompanyName>Materiais Exemplo Kwanza, Lda.</CompanyName><CompanyAddress><City>Luanda</City><Country>AO</Country></CompanyAddress><FiscalYear>2026</FiscalYear><StartDate>2026-07-01</StartDate><EndDate>2026-09-30</EndDate><CurrencyCode>AOA</CurrencyCode><DateCreated>2026-10-05</DateCreated><ProductID>Programa Exemplo/Fornecedor Exemplo</ProductID><SoftwareValidationNumber>000/AGT/2026</SoftwareValidationNumber></Header>
+<MasterFiles>${cust("C1", "Construções Kilamba, Lda.", "5401111111")}${cust("C2", "Ferragens do Cazenga, Lda.", "5402222222")}${cust("C3", "Mercado Kikolo Comércio Geral", "5403333333")}${cust("C4", "Namibe Building Supplies (Pty) Ltd", "NA8800123")}${cust("C5", "Obras Benguela Sul", "")}${cust("C9", "Consumidor final", "999999999")}
+${Object.entries(PROD).map(([k, [d]]) => `<Product><ProductType>${k === "TRP" ? "S" : "P"}</ProductType><ProductCode>${k}</ProductCode><ProductDescription>${d}</ProductDescription></Product>`).join("")}</MasterFiles>
+<SourceDocuments><SalesInvoices><NumberOfEntries>${ctl.n}</NumberOfEntries><TotalDebit>${ctl.deb.toFixed(2)}</TotalDebit><TotalCredit>${ctl.cre.toFixed(2)}</TotalCredit>${sales}</SalesInvoices>
+<MovementOfGoods>${mov("GT A/1", "2026-07-03", "C1")}${mov("GT A/2", "2026-08-02", "C1")}${mov("GT A/3", "2026-09-06", "C1")}</MovementOfGoods>
+<WorkingDocuments>${wrk("PP A/1", "PP", "2026-07-01", "C1", 3000000)}${wrk("PP A/2", "PP", "2026-09-01", "C3", 9500000)}</WorkingDocuments>
+<Payments>${pay("RG A/1", "2026-07-20", "C1", [["FT A/1", 3100800]])}${pay("RG A/2", "2026-08-14", "C2", [["FT A/2", 1244880]])}${pay("RG A/3", "2026-08-31", "C1", [["FT A/5", 2500000]])}${pay("RG A/4", "2026-09-25", "C3", [["FT A/7", 6615000]])}</Payments>
+</SourceDocuments></AuditFile>`;
+    return body;
+  })();
+
+  render(parse(SAMPLE), "saft_exemplo_3T_2026.xml", true);
+})();
+</script>
+</body>
+</html>
